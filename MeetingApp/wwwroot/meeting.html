@@ -121,7 +121,7 @@
     <!-- Video grid -->
     <main class="flex-1 p-3 overflow-hidden flex flex-col" id="videoArea">
       <!-- Screen share prominent view -->
-      <div id="screenShareView" class="hidden mb-3 relative bg-black rounded-xl overflow-hidden flex-shrink-0" style="height:55%">
+      <div id="screenShareView" class="hidden mb-3 relative bg-black rounded-xl overflow-hidden">
         <video id="screenShareVideo" autoplay playsinline class="w-full h-full object-contain"></video>
         <div id="screenShareLabel"
           class="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-lg flex items-center gap-1">
@@ -136,6 +136,15 @@
             Remote Control Active
           </div>
         </div>
+        <!-- Focus mode button -->
+        <button id="focusModeBtn"
+          class="hidden absolute bottom-2 left-2 bg-gray-800/90 hover:bg-gray-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+          </svg>
+          Focus
+        </button>
         <!-- Request control button (shown to viewer when someone is sharing) -->
         <button id="requestControlBtn"
           class="hidden absolute bottom-2 right-2 bg-gray-800/90 hover:bg-gray-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">

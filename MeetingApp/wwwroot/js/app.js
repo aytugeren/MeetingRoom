@@ -50,11 +50,13 @@ let controlRequesterName = '';
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const videoGrid          = document.getElementById('videoGrid');
+const videoArea          = document.getElementById('videoArea');
 const screenShareView    = document.getElementById('screenShareView');
 const screenShareVideo   = document.getElementById('screenShareVideo');
 const screenShareLabel   = document.getElementById('screenShareLabel');
 const remoteControlOverlay  = document.getElementById('remoteControlOverlay');
 const requestControlBtn  = document.getElementById('requestControlBtn');
+const focusModeBtn       = document.getElementById('focusModeBtn');
 const controlRequestModal = document.getElementById('controlRequestModal');
 const controlRequestText  = document.getElementById('controlRequestText');
 const acceptControlBtn   = document.getElementById('acceptControlBtn');
@@ -454,14 +456,19 @@ function showRemoteScreen(stream, sharerName) {
     </svg>
     ${escapeHtml(sharerName)}'s Screen`;
   requestControlBtn.classList.remove('hidden');
+  focusModeBtn.classList.remove('hidden');
+  videoArea.classList.add('screen-sharing-active');
 }
 
 function hideRemoteScreen() {
+  if (document.fullscreenElement === screenShareView) document.exitFullscreen().catch(() => {});
   screenShareView.classList.add('hidden');
   screenShareVideo.srcObject = null;
   requestControlBtn.classList.add('hidden');
+  focusModeBtn.classList.add('hidden');
   remoteControlOverlay.classList.add('hidden');
   remoteControlActive = false;
+  videoArea.classList.remove('screen-sharing-active');
 }
 
 // ── Remote control ────────────────────────────────────────────────────────────
@@ -683,6 +690,13 @@ denyControlBtn.addEventListener('click', () => {
     connection.invoke('DenyRemoteControl', controlRequesterId).catch(console.error);
 });
 
+// ── Focus mode button ─────────────────────────────────────────────────────────
+focusModeBtn.addEventListener('click', () => {
+  screenShareView.requestFullscreen().catch(e => {
+    showToast('Fullscreen kullanılamıyor: ' + e.message, 'error');
+  });
+});
+
 // ── Request control button ────────────────────────────────────────────────────
 requestControlBtn.addEventListener('click', () => {
   const sharer = [...participants.entries()].find(([, p]) => p.screenOn);
@@ -732,6 +746,8 @@ screenBtn.addEventListener('click', async () => {
       screenShareVideo.srcObject = screenStream;
       screenShareLabel.innerHTML = `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M2 4a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/></svg> Your Screen`;
       requestControlBtn.classList.add('hidden');
+      focusModeBtn.classList.remove('hidden');
+      videoArea.classList.add('screen-sharing-active');
 
       // Replace video track in all peers
       const screenTrack = screenStream.getVideoTracks()[0];
@@ -750,6 +766,7 @@ screenBtn.addEventListener('click', async () => {
 });
 
 async function stopScreenShare() {
+  if (document.fullscreenElement === screenShareView) await document.exitFullscreen().catch(() => {});
   if (screenStream) {
     for (const t of screenStream.getTracks()) t.stop();
     screenStream = null;
@@ -764,6 +781,8 @@ async function stopScreenShare() {
 
   screenShareView.classList.add('hidden');
   screenShareVideo.srcObject = null;
+  focusModeBtn.classList.add('hidden');
+  videoArea.classList.remove('screen-sharing-active');
 
   await connection.invoke('UpdateScreenShareState', ROOM, false).catch(console.error);
 }
