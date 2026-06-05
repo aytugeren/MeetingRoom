@@ -8,6 +8,9 @@ obj/
 ## Uploaded files
 MeetingApp/wwwroot/uploads/
 
+## Environment — credential içerir, asla commit'leme
+.env
+
 ## OS
 .DS_Store
 Thumbs.db

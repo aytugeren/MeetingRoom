@@ -6,28 +6,34 @@ services:
       dockerfile: Dockerfile
     container_name: meetingroom
     restart: unless-stopped
+    env_file: .env
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:5500
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - ASPNETCORE_URLS=${ASPNETCORE_URLS}
+      - TURN_DOMAIN=${TURN_DOMAIN}
+      - TURN_USER=${TURN_USER}
+      - TURN_CREDENTIAL=${TURN_CREDENTIAL}
     volumes:
       - uploads:/app/wwwroot/uploads
-    networks:
-      - meetingnet
-    expose:
-      - "5500"
+    ports:
+      - "5500:5500"   # NPM bu port üzerinden erişir
 
   coturn:
     image: coturn/coturn:latest
     container_name: meetingroom-turn
     restart: unless-stopped
-    network_mode: host          # UDP relay için host network şart
-    volumes:
-      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
-    command: -c /etc/coturn/turnserver.conf
+    network_mode: host
+    env_file: .env
+    command: >
+      --realm=${TURN_DOMAIN}
+      --user=${TURN_USER}:${TURN_CREDENTIAL}
+      --lt-cred-mech
+      --fingerprint
+      --listening-port=3478
+      --tls-listening-port=5349
+      --min-port=49160
+      --max-port=49200
+      --log-file=stdout
 
 volumes:
   uploads:
-
-networks:
-  meetingnet:
-    driver: bridge

@@ -1,6 +1,14 @@
 using MeetingApp.Hubs;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services.AddSignalR(options =>
 {
@@ -15,6 +23,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseStaticFiles();
 app.UseCors();
 app.MapHub<MeetingHub>("/meetingHub");
@@ -52,6 +61,27 @@ app.MapPost("/api/upload", async (HttpRequest request, IWebHostEnvironment env) 
 
     var fileUrl = $"/uploads/{roomCode}/{uniqueName}";
     return Results.Ok(new { fileName = safeFileName, fileUrl, fileSize = file.Length });
+});
+
+// ICE / TURN config — frontend buradan okur, credential client'a açık olsa da JS'e gömmekten güvenli
+app.MapGet("/api/config", (IConfiguration cfg) =>
+{
+    var domain     = cfg["TURN_DOMAIN"]     ?? "";
+    var user       = cfg["TURN_USER"]       ?? "";
+    var credential = cfg["TURN_CREDENTIAL"] ?? "";
+
+    var iceServers = new List<object>
+    {
+        new { urls = new[] { "stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302" } }
+    };
+
+    if (!string.IsNullOrEmpty(domain))
+    {
+        iceServers.Add(new { urls = $"turn:{domain}:3478",  username = user, credential });
+        iceServers.Add(new { urls = $"turns:{domain}:5349", username = user, credential });
+    }
+
+    return Results.Ok(new { iceServers });
 });
 
 // Fallback: serve index.html for unknown routes (SPA style)

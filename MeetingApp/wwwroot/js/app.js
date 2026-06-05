@@ -4,13 +4,20 @@
  */
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  // turnserver.conf'taki realm/user/credential ile eşleşmeli
-  { urls: 'turn:yourdomain.com:3478', username: 'meetingroom', credential: 'GUCLU_SIFRE_KOY' },
-  { urls: 'turns:yourdomain.com:5349', username: 'meetingroom', credential: 'GUCLU_SIFRE_KOY' },
+// ICE sunucuları /api/config'ten yüklenir — init() içinde doldurulur
+let ICE_SERVERS = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
 ];
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.iceServers?.length) ICE_SERVERS = data.iceServers;
+    }
+  } catch { /* STUN fallback ile devam */ }
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const params   = new URLSearchParams(location.search);
@@ -795,6 +802,9 @@ document.getElementById('roomCodeDisplay').textContent = ROOM;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
+  // ICE config'i backend'den yükle (TURN credential'ları env'den gelir)
+  await loadConfig();
+
   // Get camera + mic
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
