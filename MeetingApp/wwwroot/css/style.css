@@ -9,7 +9,8 @@
 #sidebar.hidden,
 #panelChat.hidden,
 #unreadBadge.hidden,
-#focusModeBtn.hidden {
+#focusModeBtn.hidden,
+#youtubeWidget.hidden {
   display: none !important;
 }
 

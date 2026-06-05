@@ -50,6 +50,11 @@ let remoteControlActive = false; // we are being controlled by someone
 let controlRequesterId   = null; // pending request from this id
 let controlRequesterName = '';
 
+// YouTube player state
+let ytPlayer  = null;
+let ytReady   = false;
+let ytPaused  = false;
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const videoGrid          = document.getElementById('videoGrid');
 const videoArea          = document.getElementById('videoArea');
@@ -100,6 +105,15 @@ function formatBytes(b) {
 
 function formatTime(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function extractYouTubeId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1).split('?')[0] || null;
+    if (u.hostname.endsWith('youtube.com')) return u.searchParams.get('v') || null;
+    return null;
+  } catch { return null; }
 }
 
 function showToast(msg, type = '') {
@@ -357,6 +371,57 @@ function stopAudioMonitor(peerId) {
     m.ctx.close().catch(() => {});
     audioMonitors.delete(peerId);
   }
+}
+
+// ── YouTube background player ──────────────────────────────────────────────────
+window.onYouTubeIframeAPIReady = () => { ytReady = true; };
+
+function loadYouTubeAPI() {
+  if (window.YT?.Player) { ytReady = true; return; }
+  if (document.getElementById('ytApiScript')) return;
+  const s = document.createElement('script');
+  s.id = 'ytApiScript';
+  s.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(s);
+}
+
+function initYTPlayer(videoId) {
+  if (!ytReady) { setTimeout(() => initYTPlayer(videoId), 200); return; }
+  const vol = parseInt(document.getElementById('ytVolumeSlider')?.value ?? 20);
+  if (ytPlayer) {
+    ytPlayer.loadVideoById(videoId);
+    ytPlayer.setVolume(vol);
+    ytPlayer.playVideo();
+    return;
+  }
+  ytPlayer = new YT.Player('ytPlayer', {
+    height: '1', width: '1', videoId,
+    playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1 },
+    events: {
+      onReady: (e) => { e.target.setVolume(vol); e.target.playVideo(); },
+      onStateChange: (e) => {
+        const playing = e.data === YT.PlayerState.PLAYING;
+        ytPaused = !playing;
+        document.getElementById('ytPlayIcon')?.classList.toggle('hidden', playing);
+        document.getElementById('ytPauseIcon')?.classList.toggle('hidden', !playing);
+      }
+    }
+  });
+}
+
+function showYTWidget(title) {
+  const widget = document.getElementById('youtubeWidget');
+  widget?.classList.remove('hidden');
+  const el = document.getElementById('ytWidgetTitle');
+  if (el) el.textContent = title || 'Playing...';
+  document.getElementById('ytPlayIcon')?.classList.add('hidden');
+  document.getElementById('ytPauseIcon')?.classList.remove('hidden');
+  ytPaused = false;
+}
+
+function hideYTWidget() {
+  document.getElementById('youtubeWidget')?.classList.add('hidden');
+  if (ytPlayer) { try { ytPlayer.stopVideo(); } catch (_) {} }
 }
 
 // ── WebRTC ────────────────────────────────────────────────────────────────────
@@ -689,6 +754,16 @@ connection.on('ReceiveRemoteEvent', (eventType, eventData) => {
   dispatchSyntheticEvent(eventType, eventData);
 });
 
+connection.on('ReceiveYouTubePlay', (videoId, senderName) => {
+  loadYouTubeAPI();
+  showYTWidget(`${senderName} is playing music`);
+  initYTPlayer(videoId);
+});
+
+connection.on('ReceiveYouTubeStop', () => {
+  hideYTWidget();
+});
+
 // Reconnect handlers
 connection.onreconnecting(() => setStatus(false));
 connection.onreconnected(() => setStatus(true));
@@ -872,7 +947,18 @@ function teardownMirrorGuard() {
   hideMirrorWarning();
 }
 
+const screenShareSupported = typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+
+function hideScreenShareButtons() {
+  screenBtn?.classList.add('hidden');
+  screenBtnMobile?.classList.add('hidden');
+}
+
 async function toggleScreen() {
+  if (!screenShareSupported) {
+    showToast('Ekran paylaşımı bu tarayıcıda desteklenmiyor. Masaüstü Chrome veya Firefox kullanın.', 'error');
+    return;
+  }
   if (!isSharingScreen) {
     try {
       screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
@@ -893,12 +979,14 @@ async function toggleScreen() {
 
       setupMirrorGuard();
     } catch (e) {
-      if (e.name !== 'NotAllowedError') showToast('Screen share failed: ' + e.message, 'error');
+      if (e.name !== 'NotAllowedError') showToast('Ekran paylaşımı başlatılamadı: ' + e.message, 'error');
     }
   } else {
     await stopScreenShare();
   }
 }
+
+if (!screenShareSupported) hideScreenShareButtons();
 
 screenBtn?.addEventListener('click', toggleScreen);
 screenBtnMobile?.addEventListener('click', toggleScreen);
@@ -969,6 +1057,22 @@ async function sendMessage() {
   const msg = chatInput.value.trim();
   if (!msg) return;
   chatInput.value = '';
+
+  if (msg.startsWith('/play ')) {
+    const url = msg.slice(6).trim();
+    const videoId = extractYouTubeId(url);
+    if (!videoId) { showToast('Geçerli bir YouTube linki girin', 'error'); return; }
+    try { await connection.invoke('PlayYouTube', ROOM, videoId); }
+    catch (e) { showToast('Müzik başlatılamadı', 'error'); }
+    return;
+  }
+
+  if (msg === '/stop') {
+    try { await connection.invoke('StopYouTube', ROOM); }
+    catch (e) { showToast('Müzik durdurulamadı', 'error'); }
+    return;
+  }
+
   try {
     await connection.invoke('SendMessage', ROOM, msg);
   } catch (e) { showToast('Failed to send message', 'error'); }
@@ -1021,6 +1125,20 @@ async function doLeave() {
 document.getElementById('leaveBtn')?.addEventListener('click', doLeave);
 document.getElementById('leaveBtnMobile')?.addEventListener('click', doLeave);
 document.getElementById('leaveBtnMobile2')?.addEventListener('click', doLeave);
+
+// YouTube widget controls
+document.getElementById('ytPlayPauseBtn')?.addEventListener('click', () => {
+  if (!ytPlayer) return;
+  if (ytPaused) { ytPlayer.playVideo(); } else { ytPlayer.pauseVideo(); }
+});
+
+document.getElementById('ytStopBtn')?.addEventListener('click', () => {
+  connection.invoke('StopYouTube', ROOM).catch(console.error);
+});
+
+document.getElementById('ytVolumeSlider')?.addEventListener('input', (e) => {
+  if (ytPlayer) ytPlayer.setVolume(parseInt(e.target.value));
+});
 
 // Copy room code
 document.getElementById('copyCodeBtn').addEventListener('click', () => {

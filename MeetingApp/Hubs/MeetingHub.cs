@@ -169,6 +169,22 @@ public class MeetingHub : Hub
             sender.UserName, fileName, fileUrl, fileSize, msg.Timestamp);
     }
 
+    // ─── YouTube background music ────────────────────────────────────────────
+
+    public async Task PlayYouTube(string roomCode, string videoId)
+    {
+        roomCode = roomCode.ToUpperInvariant();
+        if (!Rooms.TryGetValue(roomCode, out var room)) return;
+        if (!room.Participants.TryGetValue(Context.ConnectionId, out var sender)) return;
+        await Clients.Group(roomCode).SendAsync("ReceiveYouTubePlay", videoId, sender.UserName);
+    }
+
+    public async Task StopYouTube(string roomCode)
+    {
+        roomCode = roomCode.ToUpperInvariant();
+        await Clients.Group(roomCode).SendAsync("ReceiveYouTubeStop");
+    }
+
     // ─── Disconnect ──────────────────────────────────────────────────────────
 
     public override async Task OnDisconnectedAsync(Exception? exception)
