@@ -6,7 +6,6 @@ services:
       dockerfile: Dockerfile
     container_name: meetingroom
     restart: unless-stopped
-    env_file: .env
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
       - ASPNETCORE_URLS=${ASPNETCORE_URLS}
@@ -23,7 +22,6 @@ services:
     container_name: meetingroom-turn
     restart: unless-stopped
     network_mode: host
-    env_file: .env
     command: >
       --realm=${TURN_DOMAIN}
       --user=${TURN_USER}:${TURN_CREDENTIAL}
