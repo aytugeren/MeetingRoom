@@ -93,6 +93,19 @@
   color: #f87171;
 }
 
+/* ── Audio level bar ─────────────────────────────── */
+.audio-level-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  border-radius: 0 2px 0 0;
+  transition: width 0.08s ease, opacity 0.15s ease;
+  pointer-events: none;
+  z-index: 10;
+}
+
 /* ── Chat messages ────────────────────────────────── */
 .chat-msg {
   display: flex;

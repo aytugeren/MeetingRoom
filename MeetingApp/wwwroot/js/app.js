@@ -37,6 +37,8 @@ let isSharingScreen = false;
 const peerConnections = new Map();
 // peerId → { name, audioOn, videoOn, screenOn }
 const participants    = new Map();
+// peerId → { ctx, animFrame }
+const audioMonitors   = new Map();
 
 let unreadCount  = 0;
 let chatOpen     = false;
@@ -274,11 +276,69 @@ function appendMessage(senderId, senderName, message, timestamp, isFile, fileUrl
     unreadCount++;
     unreadBadge.textContent = unreadCount;
     unreadBadge.classList.remove('hidden');
+    if (!isOwn) playNotificationSound();
   }
 }
 
 function escapeHtml(s) {
   return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function playNotificationSound() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.25);
+  } catch (_) {}
+}
+
+function startAudioMonitor(peerId, stream) {
+  stopAudioMonitor(peerId);
+  try {
+    const ctx = new AudioContext();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+
+    function tick() {
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((s, v) => s + v, 0) / data.length;
+      const level = Math.min(avg / 40, 1);
+      const tile = document.getElementById(`tile-${peerId}`);
+      if (tile) {
+        let bar = tile.querySelector('.audio-level-bar');
+        if (!bar) {
+          bar = document.createElement('div');
+          bar.className = 'audio-level-bar';
+          tile.appendChild(bar);
+        }
+        bar.style.width = level > 0.04 ? `${level * 100}%` : '0%';
+        bar.style.opacity = level > 0.04 ? '1' : '0';
+      }
+      audioMonitors.get(peerId).animFrame = requestAnimationFrame(tick);
+    }
+
+    audioMonitors.set(peerId, { ctx, animFrame: requestAnimationFrame(tick) });
+  } catch (_) {}
+}
+
+function stopAudioMonitor(peerId) {
+  const m = audioMonitors.get(peerId);
+  if (m) {
+    cancelAnimationFrame(m.animFrame);
+    m.ctx.close().catch(() => {});
+    audioMonitors.delete(peerId);
+  }
 }
 
 // ── WebRTC ────────────────────────────────────────────────────────────────────
@@ -312,6 +372,11 @@ function createPeerConnection(peerId) {
     } else {
       const vid = tile.querySelector('video');
       if (vid) vid.srcObject = stream;
+    }
+
+    // Start audio level monitoring for this peer's stream
+    if (e.track.kind === 'audio') {
+      startAudioMonitor(peerId, stream);
     }
 
     // Check if this is a screen share track
@@ -366,6 +431,7 @@ async function handleIceCandidate(fromId, candidate) {
 }
 
 function closePeer(peerId) {
+  stopAudioMonitor(peerId);
   const pc = peerConnections.get(peerId);
   if (pc) { pc.close(); peerConnections.delete(peerId); }
 }
@@ -482,7 +548,7 @@ connection.on('ExistingParticipants', async (list) => {
       screenOn: p.isSharingScreen
     });
     createTile(p.userId, p.userName, null, false);
-    updateTileMediaState(p.userId, p.audioOn, p.videoOn);
+    updateTileMediaState(p.userId, p.isAudioOn, p.isVideoOn);
   }
   renderParticipants();
 
