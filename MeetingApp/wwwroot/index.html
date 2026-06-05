@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MeetingRoom</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { colors: { brand: '#6366f1' } } }
+    };
+  </script>
+</head>
+<body class="dark h-full bg-gray-950 text-gray-100 flex items-center justify-center p-4">
+
+  <div class="w-full max-w-md">
+    <!-- Logo -->
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 mb-4 shadow-lg shadow-indigo-500/30">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+        </svg>
+      </div>
+      <h1 class="text-3xl font-bold tracking-tight">MeetingRoom</h1>
+      <p class="text-gray-400 mt-1 text-sm">Free, open-source video meetings</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-gray-900 rounded-2xl shadow-2xl border border-gray-800 p-8 space-y-6">
+
+      <!-- Name input -->
+      <div>
+        <label class="block text-sm font-medium text-gray-300 mb-2">Your Name</label>
+        <input id="userName" type="text" placeholder="Enter your name"
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-100
+                 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500
+                 focus:border-transparent transition" />
+      </div>
+
+      <!-- Divider -->
+      <div class="relative">
+        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-700"></div></div>
+        <div class="relative flex justify-center text-sm">
+          <span class="px-3 bg-gray-900 text-gray-500">Choose an option</span>
+        </div>
+      </div>
+
+      <!-- Create meeting -->
+      <button id="createBtn"
+        class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold
+               rounded-xl transition focus:outline-none focus:ring-2 focus:ring-indigo-400
+               focus:ring-offset-2 focus:ring-offset-gray-900 shadow-lg shadow-indigo-500/20">
+        + New Meeting
+      </button>
+
+      <!-- Join by code -->
+      <div class="space-y-3">
+        <label class="block text-sm font-medium text-gray-300">Join with a code</label>
+        <div class="flex gap-2">
+          <input id="roomCode" type="text" placeholder="ABC123" maxlength="6"
+            class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-100
+                   placeholder-gray-500 uppercase tracking-widest font-mono focus:outline-none
+                   focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
+          <button id="joinBtn"
+            class="px-5 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold
+                   rounded-xl transition focus:outline-none focus:ring-2 focus:ring-gray-500">
+            Join
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-gray-600 text-xs mt-6">
+      All communication is local — no data leaves your network.
+    </p>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"
+    class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-700 text-white px-5 py-3
+           rounded-xl shadow-lg text-sm font-medium transition-all duration-300 opacity-0 pointer-events-none">
+  </div>
+
+  <script>
+    const userName = document.getElementById('userName');
+    const roomCodeInput = document.getElementById('roomCode');
+
+    function showToast(msg, color = 'bg-red-700') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = t.className.replace(/bg-\w+-\d+/, color);
+      t.classList.remove('opacity-0');
+      setTimeout(() => t.classList.add('opacity-0'), 3000);
+    }
+
+    function go(code) {
+      const name = userName.value.trim();
+      if (!name) { showToast('Please enter your name'); return; }
+      if (!code) { showToast('Please enter a room code'); return; }
+      sessionStorage.setItem('userName', name);
+      window.location.href = `/meeting.html?room=${code.toUpperCase()}`;
+    }
+
+    document.getElementById('createBtn').addEventListener('click', () => {
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      go(code);
+    });
+
+    document.getElementById('joinBtn').addEventListener('click', () => {
+      const code = roomCodeInput.value.trim();
+      if (!code || code.length < 4) { showToast('Enter a valid room code'); return; }
+      go(code);
+    });
+
+    roomCodeInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('joinBtn').click();
+    });
+
+    userName.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('createBtn').click();
+    });
+
+    // Restore name
+    const saved = sessionStorage.getItem('userName');
+    if (saved) userName.value = saved;
+  </script>
+</body>
+</html>

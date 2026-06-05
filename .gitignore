@@ -1,0 +1,13 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+*.suo
+
+## Uploaded files
+MeetingApp/wwwroot/uploads/
+
+## OS
+.DS_Store
+Thumbs.db

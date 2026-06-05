@@ -1,0 +1,33 @@
+services:
+
+  meetingroom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meetingroom
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5500
+    volumes:
+      - uploads:/app/wwwroot/uploads
+    networks:
+      - meetingnet
+    expose:
+      - "5500"
+
+  coturn:
+    image: coturn/coturn:latest
+    container_name: meetingroom-turn
+    restart: unless-stopped
+    network_mode: host          # UDP relay için host network şart
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: -c /etc/coturn/turnserver.conf
+
+volumes:
+  uploads:
+
+networks:
+  meetingnet:
+    driver: bridge

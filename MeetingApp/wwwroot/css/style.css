@@ -1,0 +1,209 @@
+/* ── Toolbar buttons ─────────────────────────────── */
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  color: #e5e7eb;
+  transition: background-color 0.15s, transform 0.1s;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  position: relative;
+}
+.toolbar-btn:focus-visible {
+  box-shadow: 0 0 0 2px #6366f1;
+}
+.toolbar-btn.active { /* used for mic/cam when enabled */ }
+.toolbar-btn.btn-danger {
+  background-color: #b91c1c;
+}
+
+/* ── Sidebar tabs ─────────────────────────────────── */
+.sidebar-tab {
+  border: none;
+  background: none;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.15s;
+}
+
+/* ── Video tile ───────────────────────────────────── */
+.video-tile {
+  position: relative;
+  background: #111827;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  min-height: 120px;
+}
+.video-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.video-tile .tile-label {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  pointer-events: none;
+}
+.video-tile .tile-avatar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  background: #1f2937;
+}
+.video-tile .tile-icons {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.25rem;
+}
+.tile-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  background: rgba(0,0,0,0.55);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+}
+.tile-icon svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: #f87171;
+}
+
+/* ── Chat messages ────────────────────────────────── */
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.chat-msg .msg-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.chat-msg .msg-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a5b4fc;
+}
+.chat-msg .msg-time {
+  font-size: 0.65rem;
+  color: #6b7280;
+}
+.chat-msg .msg-body {
+  font-size: 0.8rem;
+  color: #d1d5db;
+  word-break: break-word;
+  background: #1f2937;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.625rem;
+}
+.chat-msg.own .msg-name { color: #6ee7b7; }
+.chat-msg.own .msg-body { background: #1e3a5f; }
+.chat-msg .file-card {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+}
+.chat-msg .file-card svg { color: #6366f1; flex-shrink: 0; }
+.chat-msg .file-card a {
+  color: #93c5fd;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+/* ── Participant list item ────────────────────────── */
+.participant-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  background: #1f2937;
+  font-size: 0.82rem;
+}
+.participant-item .p-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #4f46e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: #fff;
+  flex-shrink: 0;
+}
+.participant-item .p-icons {
+  margin-left: auto;
+  display: flex;
+  gap: 0.25rem;
+}
+.p-icon { color: #6b7280; width: 1rem; height: 1rem; }
+.p-icon.off { color: #ef4444; }
+
+/* ── Toast ────────────────────────────────────────── */
+.toast {
+  background: #374151;
+  color: #f9fafb;
+  padding: 0.6rem 1rem;
+  border-radius: 0.625rem;
+  font-size: 0.8rem;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+  animation: fadeInUp 0.2s ease;
+  min-width: 200px;
+}
+.toast.success { background: #064e3b; }
+.toast.error   { background: #7f1d1d; }
+.toast.info    { background: #1e3a5f; }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scrollbar ────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 999px; }
+
+/* ── Spinner ──────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid #4b5563;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}

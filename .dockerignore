@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/wwwroot/uploads/
+**/.vs/
+.git/
+.gitignore
+README.md
+docker-compose.yml
+nginx/
