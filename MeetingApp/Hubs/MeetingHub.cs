@@ -48,11 +48,23 @@ public class MeetingHub : Hub
 
         // Send chat history to the joiner
         List<ChatMessage> history;
+        string? ytVideoId;
+        string? ytStarterName;
+        double ytElapsed = 0;
         lock (room.Lock)
+        {
             history = room.Messages.ToList();
+            ytVideoId = room.YoutubeVideoId;
+            ytStarterName = room.YoutubeStarterName;
+            if (room.YoutubeStartedAt.HasValue)
+                ytElapsed = (DateTime.UtcNow - room.YoutubeStartedAt.Value).TotalSeconds;
+        }
 
         if (history.Count > 0)
             await Clients.Caller.SendAsync("ChatHistory", history);
+
+        if (ytVideoId != null)
+            await Clients.Caller.SendAsync("ReceiveYouTubePlay", ytVideoId, ytStarterName ?? "", ytElapsed);
 
         // Notify others
         await Clients.OthersInGroup(roomCode).SendAsync("UserJoined", userId, userName);
@@ -176,12 +188,30 @@ public class MeetingHub : Hub
         roomCode = roomCode.ToUpperInvariant();
         if (!Rooms.TryGetValue(roomCode, out var room)) return;
         if (!room.Participants.TryGetValue(Context.ConnectionId, out var sender)) return;
-        await Clients.Group(roomCode).SendAsync("ReceiveYouTubePlay", videoId, sender.UserName);
+
+        lock (room.Lock)
+        {
+            room.YoutubeVideoId = videoId;
+            room.YoutubeStarterName = sender.UserName;
+            room.YoutubeStartedAt = DateTime.UtcNow;
+        }
+
+        // All clients start from 0 seconds — elapsed is 0 at broadcast time
+        await Clients.Group(roomCode).SendAsync("ReceiveYouTubePlay", videoId, sender.UserName, 0.0);
     }
 
     public async Task StopYouTube(string roomCode)
     {
         roomCode = roomCode.ToUpperInvariant();
+        if (!Rooms.TryGetValue(roomCode, out var room)) return;
+
+        lock (room.Lock)
+        {
+            room.YoutubeVideoId = null;
+            room.YoutubeStarterName = null;
+            room.YoutubeStartedAt = null;
+        }
+
         await Clients.Group(roomCode).SendAsync("ReceiveYouTubeStop");
     }
 

@@ -385,18 +385,19 @@ function loadYouTubeAPI() {
   document.head.appendChild(s);
 }
 
-function initYTPlayer(videoId) {
-  if (!ytReady) { setTimeout(() => initYTPlayer(videoId), 200); return; }
+function initYTPlayer(videoId, startSeconds = 0) {
+  if (!ytReady) { setTimeout(() => initYTPlayer(videoId, startSeconds), 200); return; }
   const vol = parseInt(document.getElementById('ytVolumeSlider')?.value ?? 20);
+  const start = Math.max(0, Math.floor(startSeconds));
   if (ytPlayer) {
-    ytPlayer.loadVideoById(videoId);
+    ytPlayer.loadVideoById({ videoId, startSeconds: start });
     ytPlayer.setVolume(vol);
     ytPlayer.playVideo();
     return;
   }
   ytPlayer = new YT.Player('ytPlayer', {
     height: '1', width: '1', videoId,
-    playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1 },
+    playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, playsinline: 1, start },
     events: {
       onReady: (e) => { e.target.setVolume(vol); e.target.playVideo(); },
       onStateChange: (e) => {
@@ -754,10 +755,10 @@ connection.on('ReceiveRemoteEvent', (eventType, eventData) => {
   dispatchSyntheticEvent(eventType, eventData);
 });
 
-connection.on('ReceiveYouTubePlay', (videoId, senderName) => {
+connection.on('ReceiveYouTubePlay', (videoId, senderName, elapsedSeconds) => {
   loadYouTubeAPI();
   showYTWidget(`${senderName} is playing music`);
-  initYTPlayer(videoId);
+  initYTPlayer(videoId, elapsedSeconds || 0);
 });
 
 connection.on('ReceiveYouTubeStop', () => {
