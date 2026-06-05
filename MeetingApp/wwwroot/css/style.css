@@ -1,3 +1,18 @@
+/* ── Tailwind hidden/flex conflict fix ───────────── *
+ * Tailwind CDN writes flex's rule after hidden's rule in the stylesheet,
+ * so flex (display:flex) overrides hidden (display:none) for any element
+ * that carries both classes. ID-level specificity + !important ensures
+ * hidden always wins, regardless of stylesheet order.
+ * ─────────────────────────────────────────────────── */
+#namePrompt.hidden,
+#controlRequestModal.hidden,
+#sidebar.hidden,
+#panelChat.hidden,
+#unreadBadge.hidden,
+#focusModeBtn.hidden {
+  display: none !important;
+}
+
 /* ── Toolbar buttons ─────────────────────────────── */
 .toolbar-btn {
   display: inline-flex;
