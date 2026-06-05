@@ -22,7 +22,7 @@ async function loadConfig() {
 // ── State ─────────────────────────────────────────────────────────────────────
 const params   = new URLSearchParams(location.search);
 const ROOM     = (params.get('room') || '').toUpperCase();
-const MY_NAME  = sessionStorage.getItem('userName') || 'Guest';
+let   MY_NAME  = sessionStorage.getItem('userName') || '';
 
 if (!ROOM) { location.href = '/'; }
 
@@ -75,6 +75,10 @@ const statusText         = document.getElementById('statusText');
 const muteBtn            = document.getElementById('muteBtn');
 const cameraBtn          = document.getElementById('cameraBtn');
 const screenBtn          = document.getElementById('screenBtn');
+// Mobile mirror buttons
+const muteBtnMobile      = document.getElementById('muteBtnMobile');
+const cameraBtnMobile    = document.getElementById('cameraBtnMobile');
+const screenBtnMobile    = document.getElementById('screenBtnMobile');
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function initials(name) {
@@ -734,11 +738,35 @@ requestControlBtn.addEventListener('click', () => {
 });
 
 // ── Toolbar buttons ───────────────────────────────────────────────────────────
-muteBtn.addEventListener('click', async () => {
-  isMuted = !isMuted;
+function syncMuteUI() {
+  ['micOnIcon','micOnIconMobile'].forEach(id => document.getElementById(id)?.classList.toggle('hidden', isMuted));
+  ['micOffIcon','micOffIconMobile'].forEach(id => document.getElementById(id)?.classList.toggle('hidden', !isMuted));
+  [muteBtn, muteBtnMobile].forEach(b => {
+    b?.classList.toggle('bg-red-700', isMuted);
+    b?.classList.toggle('bg-gray-700', !isMuted);
+  });
+}
 
+function syncCameraUI() {
+  ['camOnIcon','camOnIconMobile'].forEach(id => document.getElementById(id)?.classList.toggle('hidden', isCameraOff));
+  ['camOffIcon','camOffIconMobile'].forEach(id => document.getElementById(id)?.classList.toggle('hidden', !isCameraOff));
+  [cameraBtn, cameraBtnMobile].forEach(b => {
+    b?.classList.toggle('bg-red-700', isCameraOff);
+    b?.classList.toggle('bg-gray-700', !isCameraOff);
+  });
+}
+
+function syncScreenUI() {
+  const sharing = isSharingScreen;
+  [screenBtn, screenBtnMobile].forEach(b => b?.classList.toggle('bg-indigo-700', sharing));
+  screenBtn?.querySelector('span')?.textContent && (screenBtn.querySelector('span').textContent = sharing ? 'Stop Share' : 'Share');
+  const mbl = document.getElementById('screenBtnMobileLabel');
+  if (mbl) mbl.textContent = sharing ? 'Stop' : 'Share';
+}
+
+async function toggleMute() {
+  isMuted = !isMuted;
   if (isMuted) {
-    // Stop audio tracks to release mic hardware
     for (const t of localStream.getAudioTracks()) { t.stop(); localStream.removeTrack(t); }
     await replaceAudioTrack(null);
     stopAudioMonitor('local');
@@ -754,20 +782,14 @@ muteBtn.addEventListener('click', async () => {
       isMuted = true;
     }
   }
-
-  document.getElementById('micOnIcon').classList.toggle('hidden', isMuted);
-  document.getElementById('micOffIcon').classList.toggle('hidden', !isMuted);
-  muteBtn.classList.toggle('bg-red-700', isMuted);
-  muteBtn.classList.toggle('bg-gray-700', !isMuted);
+  syncMuteUI();
   connection.invoke('UpdateMediaState', ROOM, !isMuted, !isCameraOff).catch(console.error);
   renderParticipants();
-});
+}
 
-cameraBtn.addEventListener('click', async () => {
+async function toggleCamera() {
   isCameraOff = !isCameraOff;
-
   if (isCameraOff) {
-    // Stop video tracks to turn off camera light
     for (const t of localStream.getVideoTracks()) { t.stop(); localStream.removeTrack(t); }
     await replaceVideoTrack(null);
   } else {
@@ -782,25 +804,81 @@ cameraBtn.addEventListener('click', async () => {
       isCameraOff = true;
     }
   }
-
-  document.getElementById('camOnIcon').classList.toggle('hidden', isCameraOff);
-  document.getElementById('camOffIcon').classList.toggle('hidden', !isCameraOff);
-  cameraBtn.classList.toggle('bg-red-700', isCameraOff);
-  cameraBtn.classList.toggle('bg-gray-700', !isCameraOff);
+  syncCameraUI();
   updateTileMediaState('local', !isMuted, !isCameraOff);
   connection.invoke('UpdateMediaState', ROOM, !isMuted, !isCameraOff).catch(console.error);
   renderParticipants();
-});
+}
 
-screenBtn.addEventListener('click', async () => {
+muteBtn?.addEventListener('click', toggleMute);
+muteBtnMobile?.addEventListener('click', toggleMute);
+cameraBtn?.addEventListener('click', toggleCamera);
+cameraBtnMobile?.addEventListener('click', toggleCamera);
+
+// ── Mirror guard ──────────────────────────────────────────────────────────────
+let mirrorVisibilityHandler = null;
+
+function getMirrorWarningEl() {
+  let el = document.getElementById('screenMirrorWarning');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'screenMirrorWarning';
+    el.className = 'screen-mirror-warning';
+    el.innerHTML = `
+      <div class="mirror-warning-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+      </div>
+      <p class="mirror-warning-title">İçiçe ekran görüntüsü uyarısı</p>
+      <p class="mirror-warning-body">Şu anda bulunduğunuz sekme paylaşılıyor.<br>
+        <strong>Başka bir sekmeye geçtiğinizde</strong> ekran paylaşımı otomatik olarak aktif olacak.</p>`;
+    screenShareView.appendChild(el);
+  }
+  return el;
+}
+
+function showMirrorWarning() {
+  getMirrorWarningEl().classList.remove('hidden');
+}
+
+function hideMirrorWarning() {
+  document.getElementById('screenMirrorWarning')?.classList.add('hidden');
+}
+
+function setupMirrorGuard() {
+  teardownMirrorGuard();
+  // Show warning immediately if this tab is visible (= mirror risk)
+  if (!document.hidden) showMirrorWarning();
+
+  mirrorVisibilityHandler = () => {
+    if (document.hidden) {
+      // User switched to another tab/window — safe to share
+      hideMirrorWarning();
+    } else {
+      // User returned to meeting tab — mirror risk again
+      showMirrorWarning();
+    }
+  };
+  document.addEventListener('visibilitychange', mirrorVisibilityHandler);
+}
+
+function teardownMirrorGuard() {
+  if (mirrorVisibilityHandler) {
+    document.removeEventListener('visibilitychange', mirrorVisibilityHandler);
+    mirrorVisibilityHandler = null;
+  }
+  hideMirrorWarning();
+}
+
+async function toggleScreen() {
   if (!isSharingScreen) {
     try {
       screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       isSharingScreen = true;
-      screenBtn.classList.add('bg-indigo-700');
-      screenBtn.querySelector('span').textContent = 'Stop Share';
+      syncScreenUI();
 
-      // Show own screen in screenShareView
       screenShareView.classList.remove('hidden');
       screenShareVideo.srcObject = screenStream;
       screenShareLabel.innerHTML = `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M2 4a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/></svg> Your Screen`;
@@ -808,33 +886,33 @@ screenBtn.addEventListener('click', async () => {
       focusModeBtn.classList.remove('hidden');
       videoArea.classList.add('screen-sharing-active');
 
-      // Replace video track in all peers
       const screenTrack = screenStream.getVideoTracks()[0];
       await replaceVideoTrack(screenTrack);
-
-      // Notify server
       await connection.invoke('UpdateScreenShareState', ROOM, true);
-
       screenTrack.onended = () => stopScreenShare();
+
+      setupMirrorGuard();
     } catch (e) {
       if (e.name !== 'NotAllowedError') showToast('Screen share failed: ' + e.message, 'error');
     }
   } else {
     await stopScreenShare();
   }
-});
+}
+
+screenBtn?.addEventListener('click', toggleScreen);
+screenBtnMobile?.addEventListener('click', toggleScreen);
 
 async function stopScreenShare() {
+  teardownMirrorGuard();
   if (document.fullscreenElement === screenShareView) await document.exitFullscreen().catch(() => {});
   if (screenStream) {
     for (const t of screenStream.getTracks()) t.stop();
     screenStream = null;
   }
   isSharingScreen = false;
-  screenBtn.classList.remove('bg-indigo-700');
-  screenBtn.querySelector('span').textContent = 'Share';
+  syncScreenUI();
 
-  // Restore camera track
   const camTrack = localStream?.getVideoTracks()[0] || null;
   await replaceVideoTrack(camTrack);
 
@@ -928,7 +1006,7 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
 });
 
 // ── Leave ─────────────────────────────────────────────────────────────────────
-document.getElementById('leaveBtn').addEventListener('click', async () => {
+async function doLeave() {
   await stopScreenShare().catch(() => {});
   stopAudioMonitor('local');
   await connection.invoke('LeaveRoom', ROOM).catch(() => {});
@@ -938,7 +1016,11 @@ document.getElementById('leaveBtn').addEventListener('click', async () => {
   peerSenders.clear();
   if (localStream) for (const t of localStream.getTracks()) t.stop();
   location.href = '/';
-});
+}
+
+document.getElementById('leaveBtn')?.addEventListener('click', doLeave);
+document.getElementById('leaveBtnMobile')?.addEventListener('click', doLeave);
+document.getElementById('leaveBtnMobile2')?.addEventListener('click', doLeave);
 
 // Copy room code
 document.getElementById('copyCodeBtn').addEventListener('click', () => {
@@ -948,23 +1030,19 @@ document.getElementById('roomCodeDisplay').textContent = ROOM;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
-  // ICE config'i backend'den yükle (TURN credential'ları env'den gelir)
   await loadConfig();
 
-  // Get camera + mic
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   } catch (e) {
     showToast('Could not access camera/mic — joining without media', 'error');
-    localStream = new MediaStream(); // empty stream
+    localStream = new MediaStream();
   }
 
-  // Create local tile and start local mic monitoring
   createTile('local', MY_NAME, localStream, true);
   updateTileMediaState('local', true, true);
   if (localStream.getAudioTracks().length) startAudioMonitor('local', localStream);
 
-  // Connect SignalR
   try {
     await connection.start();
     myId = connection.connectionId;
@@ -978,4 +1056,35 @@ async function init() {
   }
 }
 
-init();
+// ── Name prompt / boot ────────────────────────────────────────────────────────
+const namePrompt     = document.getElementById('namePrompt');
+const promptRoomCode = document.getElementById('promptRoomCode');
+const promptName     = document.getElementById('promptName');
+const promptJoinBtn  = document.getElementById('promptJoinBtn');
+
+function bootWithName(name) {
+  MY_NAME = name;
+  sessionStorage.setItem('userName', name);
+  namePrompt?.classList.add('hidden');
+  init();
+}
+
+if (MY_NAME) {
+  // Name already known — join immediately
+  init();
+} else {
+  // Show name prompt
+  if (promptRoomCode) promptRoomCode.textContent = ROOM;
+  namePrompt?.classList.remove('hidden');
+  setTimeout(() => promptName?.focus(), 100);
+}
+
+promptJoinBtn?.addEventListener('click', () => {
+  const name = promptName?.value.trim();
+  if (!name) { promptName?.focus(); return; }
+  bootWithName(name);
+});
+
+promptName?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') promptJoinBtn?.click();
+});

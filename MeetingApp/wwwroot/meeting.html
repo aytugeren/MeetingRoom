@@ -2,7 +2,7 @@
 <html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Meeting — MeetingRoom</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/css/style.css" />
@@ -15,39 +15,70 @@
 </head>
 <body class="dark h-full bg-gray-950 text-gray-100 flex flex-col overflow-hidden">
 
-  <!-- Top toolbar -->
-  <header class="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 shrink-0">
+  <!-- ── Name prompt overlay (shown when no name in sessionStorage) ────────── -->
+  <div id="namePrompt" class="hidden fixed inset-0 bg-gray-950/95 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 p-8 max-w-sm w-full shadow-2xl">
+      <div class="text-center mb-6">
+        <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-600 mb-3 shadow-lg shadow-indigo-500/30">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold">Join Meeting</h2>
+        <p class="text-gray-400 text-sm mt-1">
+          Room: <span id="promptRoomCode" class="font-mono text-indigo-400 font-bold tracking-widest"></span>
+        </p>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Your Name</label>
+          <input id="promptName" type="text" placeholder="Enter your name" autocomplete="name"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-100
+                   placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500
+                   focus:border-transparent transition" />
+        </div>
+        <button id="promptJoinBtn"
+          class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-semibold
+                 transition focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          Join Meeting
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Top toolbar ────────────────────────────────────────────────────────── -->
+  <header class="flex items-center justify-between px-3 py-2 bg-gray-900 border-b border-gray-800 shrink-0 gap-2">
+
     <!-- Left: room info -->
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="hidden sm:flex w-8 h-8 rounded-lg bg-indigo-600 items-center justify-center shrink-0">
         <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
         </svg>
       </div>
-      <div>
-        <div class="flex items-center gap-2">
-          <span class="font-semibold text-sm">Room:</span>
+      <div class="min-w-0">
+        <div class="flex items-center gap-1.5">
+          <span class="hidden sm:inline font-semibold text-sm">Room:</span>
           <code id="roomCodeDisplay" class="font-mono text-indigo-400 font-bold tracking-widest text-sm"></code>
-          <button id="copyCodeBtn" title="Copy room code"
-            class="text-gray-500 hover:text-gray-300 transition text-xs">
+          <button id="copyCodeBtn" title="Copy room code" class="text-gray-500 hover:text-gray-300 transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
             </svg>
           </button>
         </div>
-        <div class="flex items-center gap-1.5">
-          <span id="statusDot" class="w-2 h-2 rounded-full bg-yellow-400"></span>
-          <span id="statusText" class="text-xs text-gray-400">Connecting…</span>
+        <div class="flex items-center gap-1">
+          <span id="statusDot" class="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>
+          <span id="statusText" class="text-xs text-gray-400 hidden sm:inline">Connecting…</span>
         </div>
       </div>
     </div>
 
-    <!-- Center: media controls -->
-    <div class="flex items-center gap-2">
-      <button id="muteBtn" title="Toggle microphone"
-        class="toolbar-btn bg-gray-700 hover:bg-gray-600 active">
+    <!-- Center: media controls (desktop only — mobile uses bottom bar) -->
+    <div id="desktopControls" class="hidden sm:flex items-center gap-2">
+      <button id="muteBtn" title="Toggle microphone" class="toolbar-btn bg-gray-700 hover:bg-gray-600">
         <svg id="micOnIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 016 0v6a3 3 0 01-3 3z"/>
@@ -59,8 +90,7 @@
         </svg>
       </button>
 
-      <button id="cameraBtn" title="Toggle camera"
-        class="toolbar-btn bg-gray-700 hover:bg-gray-600 active">
+      <button id="cameraBtn" title="Toggle camera" class="toolbar-btn bg-gray-700 hover:bg-gray-600">
         <svg id="camOnIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
@@ -72,18 +102,27 @@
         </svg>
       </button>
 
-      <button id="screenBtn" title="Share screen"
-        class="toolbar-btn bg-gray-700 hover:bg-gray-600">
+      <button id="screenBtn" title="Share screen" class="toolbar-btn bg-gray-700 hover:bg-gray-600">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
         </svg>
         <span class="text-xs font-medium ml-1">Share</span>
       </button>
+
+      <div class="w-px h-6 bg-gray-700 mx-1"></div>
+
+      <button id="leaveBtn" class="toolbar-btn bg-red-700 hover:bg-red-600 text-white">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+        <span class="text-xs font-medium ml-1">Leave</span>
+      </button>
     </div>
 
-    <!-- Right: sidebar toggles + leave -->
-    <div class="flex items-center gap-2">
+    <!-- Right: sidebar toggles -->
+    <div class="flex items-center gap-1.5">
       <button id="participantsBtn" title="Participants"
         class="toolbar-btn bg-gray-700 hover:bg-gray-600 relative">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,24 +143,24 @@
           class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-xs flex items-center justify-center font-bold">0</span>
       </button>
 
-      <button id="leaveBtn"
-        class="toolbar-btn bg-red-700 hover:bg-red-600 text-white">
+      <!-- Leave button visible on mobile in header area (also in bottom bar) -->
+      <button id="leaveBtnMobile" class="sm:hidden toolbar-btn bg-red-700 hover:bg-red-600 text-white">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
         </svg>
-        <span class="text-xs font-medium ml-1">Leave</span>
       </button>
     </div>
   </header>
 
-  <!-- Main content area -->
-  <div class="flex flex-1 overflow-hidden">
+  <!-- ── Main content area ──────────────────────────────────────────────────── -->
+  <div class="flex flex-1 overflow-hidden min-h-0">
 
-    <!-- Video grid -->
-    <main class="flex-1 p-3 overflow-hidden flex flex-col" id="videoArea">
+    <!-- Video area -->
+    <main class="flex-1 p-2 sm:p-3 overflow-hidden flex flex-col min-h-0 mobile-content-area" id="videoArea">
+
       <!-- Screen share prominent view -->
-      <div id="screenShareView" class="hidden mb-3 relative bg-black rounded-xl overflow-hidden">
+      <div id="screenShareView" class="hidden mb-2 sm:mb-3 relative bg-black rounded-xl overflow-hidden">
         <video id="screenShareVideo" autoplay playsinline class="w-full h-full object-contain"></video>
         <div id="screenShareLabel"
           class="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded-lg flex items-center gap-1">
@@ -145,7 +184,7 @@
           </svg>
           Focus
         </button>
-        <!-- Request control button (shown to viewer when someone is sharing) -->
+        <!-- Request control button -->
         <button id="requestControlBtn"
           class="hidden absolute bottom-2 right-2 bg-gray-800/90 hover:bg-gray-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">
           Request Control
@@ -155,14 +194,13 @@
       <!-- Video grid -->
       <div id="videoGrid"
         class="flex-1 grid gap-2 overflow-hidden"
-        style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); grid-auto-rows: 1fr; align-content: start;">
-        <!-- Local tile injected by JS -->
+        style="grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); grid-auto-rows: 1fr; align-content: start;">
       </div>
     </main>
 
     <!-- Sidebar -->
     <aside id="sidebar"
-      class="hidden w-80 bg-gray-900 border-l border-gray-800 flex flex-col overflow-hidden shrink-0">
+      class="hidden bg-gray-900 border-l border-gray-800 flex flex-col overflow-hidden shrink-0 sidebar-panel">
 
       <!-- Tab bar -->
       <div class="flex border-b border-gray-800 shrink-0">
@@ -177,17 +215,12 @@
       </div>
 
       <!-- Participants panel -->
-      <div id="panelParticipants" class="flex-1 overflow-y-auto p-3 space-y-1">
-        <!-- Injected by JS -->
-      </div>
+      <div id="panelParticipants" class="flex-1 overflow-y-auto p-3 space-y-1"></div>
 
       <!-- Chat panel -->
       <div id="panelChat" class="hidden flex-1 flex flex-col overflow-hidden">
-        <div id="chatMessages" class="flex-1 overflow-y-auto p-3 space-y-3">
-          <!-- Messages injected by JS -->
-        </div>
+        <div id="chatMessages" class="flex-1 overflow-y-auto p-3 space-y-3"></div>
 
-        <!-- File upload button + input -->
         <div class="px-3 pb-1">
           <label for="fileInput"
             class="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 cursor-pointer transition">
@@ -200,13 +233,11 @@
           <input type="file" id="fileInput" class="hidden" />
         </div>
 
-        <!-- Message input -->
         <div class="p-3 border-t border-gray-800 flex gap-2">
           <input id="chatInput" type="text" placeholder="Send a message…"
             class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100
                    placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
-          <button id="sendBtn"
-            class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg transition">
+          <button id="sendBtn" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -214,11 +245,57 @@
           </button>
         </div>
       </div>
-
     </aside>
   </div>
 
-  <!-- Remote control request modal -->
+  <!-- ── Mobile bottom toolbar ──────────────────────────────────────────────── -->
+  <div id="mobileToolbar"
+    class="sm:hidden flex items-center justify-around bg-gray-900 border-t border-gray-800 shrink-0 px-2 py-2 mobile-toolbar-safe">
+
+    <button id="muteBtnMobile" title="Mikrofon" class="toolbar-btn bg-gray-700 hover:bg-gray-600 flex-col gap-0.5 !py-1.5 !px-3">
+      <svg id="micOnIconMobile" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 016 0v6a3 3 0 01-3 3z"/>
+      </svg>
+      <svg id="micOffIconMobile" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+      </svg>
+      <span class="text-xs text-gray-400">Mic</span>
+    </button>
+
+    <button id="cameraBtnMobile" title="Kamera" class="toolbar-btn bg-gray-700 hover:bg-gray-600 flex-col gap-0.5 !py-1.5 !px-3">
+      <svg id="camOnIconMobile" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+      </svg>
+      <svg id="camOffIconMobile" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M15 10l4.553-2.069A1 1 0 0121 8.869v6.262a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18"/>
+      </svg>
+      <span class="text-xs text-gray-400">Camera</span>
+    </button>
+
+    <button id="screenBtnMobile" title="Ekran paylaş" class="toolbar-btn bg-gray-700 hover:bg-gray-600 flex-col gap-0.5 !py-1.5 !px-3">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+      <span id="screenBtnMobileLabel" class="text-xs text-gray-400">Share</span>
+    </button>
+
+    <button id="leaveBtnMobile2" class="toolbar-btn bg-red-700 hover:bg-red-600 text-white flex-col gap-0.5 !py-1.5 !px-3">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+      </svg>
+      <span class="text-xs">Leave</span>
+    </button>
+  </div>
+
+  <!-- ── Remote control request modal ──────────────────────────────────────── -->
   <div id="controlRequestModal"
     class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
     <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
@@ -226,21 +303,16 @@
       <p id="controlRequestText" class="text-gray-400 text-sm mb-5"></p>
       <div class="flex gap-3">
         <button id="acceptControlBtn"
-          class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition">
-          Allow
-        </button>
+          class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition">Allow</button>
         <button id="denyControlBtn"
-          class="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-xl font-medium transition">
-          Deny
-        </button>
+          class="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-xl font-medium transition">Deny</button>
       </div>
     </div>
   </div>
 
   <!-- Toast container -->
-  <div id="toastContainer" class="fixed bottom-5 right-5 space-y-2 z-50"></div>
+  <div id="toastContainer" class="fixed bottom-20 sm:bottom-5 right-5 space-y-2 z-50"></div>
 
-  <!-- Scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
   <script src="/js/app.js"></script>
 </body>

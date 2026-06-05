@@ -131,6 +131,56 @@
   display: none;
 }
 
+/* ── Screen mirror warning overlay ──────────────── */
+.screen-mirror-warning {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.screen-mirror-warning.hidden {
+  display: none;
+}
+.mirror-warning-icon {
+  width: 3rem;
+  height: 3rem;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1.5px solid rgba(251, 191, 36, 0.4);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.25rem;
+}
+.mirror-warning-icon svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  stroke: #fbbf24;
+}
+.mirror-warning-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fbbf24;
+}
+.mirror-warning-body {
+  font-size: 0.8rem;
+  color: #d1d5db;
+  line-height: 1.6;
+  max-width: 26rem;
+}
+.mirror-warning-body strong {
+  color: #fff;
+}
+
 /* ── Mic level indicator ─────────────────────────── */
 .tile-mic-indicator {
   position: absolute;
@@ -278,4 +328,41 @@
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   display: inline-block;
+}
+
+/* ── Mobile layout ────────────────────────────────── */
+
+/* Safe area bottom padding for notched phones */
+.mobile-toolbar-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Sidebar: full width on mobile, fixed width on desktop */
+.sidebar-panel {
+  width: 100%;
+}
+@media (min-width: 640px) {
+  .sidebar-panel {
+    width: 20rem; /* 320px */
+  }
+}
+
+/* Screen sharing strip smaller on mobile */
+@media (max-width: 639px) {
+  #videoArea.screen-sharing-active #videoGrid {
+    flex: 0 0 110px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    grid-auto-rows: 100px !important;
+  }
+
+  .video-tile {
+    min-height: 80px;
+  }
+}
+
+/* Toast above mobile bottom bar */
+@media (max-width: 639px) {
+  #toastContainer {
+    bottom: 5.5rem;
+  }
 }
