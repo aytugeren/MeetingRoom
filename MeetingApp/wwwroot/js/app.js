@@ -35,6 +35,8 @@ let isSharingScreen = false;
 
 // peerId → RTCPeerConnection
 const peerConnections = new Map();
+// peerId → { video: RTCRtpSender, audio: RTCRtpSender }
+const peerSenders     = new Map();
 // peerId → { name, audioOn, videoOn, screenOn }
 const participants    = new Map();
 // peerId → { ctx, animFrame }
@@ -140,7 +142,26 @@ function createTile(id, name, stream, isLocal) {
   icons.className = 'tile-icons';
   icons.id = `icons-${id}`;
 
-  tile.append(video, avatar, label, icons);
+  // Mic level indicator (top-left)
+  const micInd = document.createElement('div');
+  micInd.className = 'tile-mic-indicator';
+  micInd.id = `mic-ind-${id}`;
+
+  const micFill = document.createElement('div');
+  micFill.className = 'mic-fill-bar';
+  micFill.id = `mic-fill-${id}`;
+
+  const micSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  micSvg.setAttribute('viewBox', '0 0 24 24');
+  micSvg.setAttribute('fill', 'none');
+  micSvg.setAttribute('stroke', 'white');
+  micSvg.setAttribute('stroke-width', '2.5');
+  micSvg.setAttribute('stroke-linecap', 'round');
+  micSvg.setAttribute('stroke-linejoin', 'round');
+  micSvg.innerHTML = `<path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 016 0v6a3 3 0 01-3 3z"/>`;
+  micInd.append(micFill, micSvg);
+
+  tile.append(video, avatar, label, icons, micInd);
   videoGrid.appendChild(tile);
   return tile;
 }
@@ -315,18 +336,9 @@ function startAudioMonitor(peerId, stream) {
     function tick() {
       analyser.getByteFrequencyData(data);
       const avg = data.reduce((s, v) => s + v, 0) / data.length;
-      const level = Math.min(avg / 40, 1);
-      const tile = document.getElementById(`tile-${peerId}`);
-      if (tile) {
-        let bar = tile.querySelector('.audio-level-bar');
-        if (!bar) {
-          bar = document.createElement('div');
-          bar.className = 'audio-level-bar';
-          tile.appendChild(bar);
-        }
-        bar.style.width = level > 0.04 ? `${level * 100}%` : '0%';
-        bar.style.opacity = level > 0.04 ? '1' : '0';
-      }
+      const level = Math.min(avg / 38, 1);
+      const fill = document.getElementById(`mic-fill-${peerId}`);
+      if (fill) fill.style.height = level > 0.03 ? `${level * 100}%` : '0%';
       audioMonitors.get(peerId).animFrame = requestAnimationFrame(tick);
     }
 
@@ -350,11 +362,15 @@ function createPeerConnection(peerId) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   peerConnections.set(peerId, pc);
 
-  // Add local tracks
+  // Add local tracks and store senders by kind
+  const senders = {};
   if (localStream) {
-    for (const track of localStream.getTracks())
-      pc.addTrack(track, localStream);
+    for (const track of localStream.getTracks()) {
+      const sender = pc.addTrack(track, localStream);
+      senders[track.kind] = sender;
+    }
   }
+  peerSenders.set(peerId, senders);
 
   // Send ICE candidates via SignalR
   pc.onicecandidate = e => {
@@ -379,11 +395,6 @@ function createPeerConnection(peerId) {
     // Start audio level monitoring for this peer's stream
     if (e.track.kind === 'audio') {
       startAudioMonitor(peerId, stream);
-    }
-
-    // Check if this is a screen share track
-    if (e.track.kind === 'video' && e.track.label && e.track.label.toLowerCase().includes('screen')) {
-      showRemoteScreen(stream, name);
     }
   };
 
@@ -436,13 +447,18 @@ function closePeer(peerId) {
   stopAudioMonitor(peerId);
   const pc = peerConnections.get(peerId);
   if (pc) { pc.close(); peerConnections.delete(peerId); }
+  peerSenders.delete(peerId);
 }
 
-// Replace all outgoing video tracks (used for screen share toggle)
 async function replaceVideoTrack(newTrack) {
-  for (const [, pc] of peerConnections) {
-    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-    if (sender && newTrack) await sender.replaceTrack(newTrack);
+  for (const [, senders] of peerSenders) {
+    if (senders.video) await senders.video.replaceTrack(newTrack).catch(console.error);
+  }
+}
+
+async function replaceAudioTrack(newTrack) {
+  for (const [, senders] of peerSenders) {
+    if (senders.audio) await senders.audio.replaceTrack(newTrack).catch(console.error);
   }
 }
 
@@ -571,6 +587,7 @@ connection.on('ChatHistory', (messages) => {
 connection.on('UserJoined', (userId, userName) => {
   participants.set(userId, { name: userName, audioOn: true, videoOn: true, screenOn: false });
   createTile(userId, userName, null, false);
+  updateTileMediaState(userId, true, true);
   renderParticipants();
   showToast(`${userName} joined`, 'success');
 });
@@ -617,7 +634,18 @@ connection.on('ParticipantMediaChanged', (userId, audioOn, videoOn, screenOn) =>
     p.videoOn = videoOn;
     const wasSharing = p.screenOn;
     p.screenOn = screenOn;
-    if (!screenOn && wasSharing) hideRemoteScreen();
+
+    if (screenOn && !wasSharing) {
+      // replaceTrack doesn't fire ontrack again — grab stream from tile.
+      // Small delay so the replaced track has time to propagate before we display it.
+      const sharerName = p.name;
+      setTimeout(() => {
+        const vid = document.getElementById(`tile-${userId}`)?.querySelector('video');
+        if (vid?.srcObject) showRemoteScreen(vid.srcObject, sharerName);
+      }, 300);
+    } else if (!screenOn && wasSharing) {
+      hideRemoteScreen();
+    }
   }
   updateTileMediaState(userId, audioOn, videoOn);
   renderParticipants();
@@ -706,11 +734,27 @@ requestControlBtn.addEventListener('click', () => {
 });
 
 // ── Toolbar buttons ───────────────────────────────────────────────────────────
-muteBtn.addEventListener('click', () => {
+muteBtn.addEventListener('click', async () => {
   isMuted = !isMuted;
-  if (localStream) {
-    for (const t of localStream.getAudioTracks()) t.enabled = !isMuted;
+
+  if (isMuted) {
+    // Stop audio tracks to release mic hardware
+    for (const t of localStream.getAudioTracks()) { t.stop(); localStream.removeTrack(t); }
+    await replaceAudioTrack(null);
+    stopAudioMonitor('local');
+  } else {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const track = s.getAudioTracks()[0];
+      localStream.addTrack(track);
+      await replaceAudioTrack(track);
+      startAudioMonitor('local', localStream);
+    } catch (e) {
+      showToast('Mikrofon açılamadı: ' + e.message, 'error');
+      isMuted = true;
+    }
   }
+
   document.getElementById('micOnIcon').classList.toggle('hidden', isMuted);
   document.getElementById('micOffIcon').classList.toggle('hidden', !isMuted);
   muteBtn.classList.toggle('bg-red-700', isMuted);
@@ -719,11 +763,26 @@ muteBtn.addEventListener('click', () => {
   renderParticipants();
 });
 
-cameraBtn.addEventListener('click', () => {
+cameraBtn.addEventListener('click', async () => {
   isCameraOff = !isCameraOff;
-  if (localStream) {
-    for (const t of localStream.getVideoTracks()) t.enabled = !isCameraOff;
+
+  if (isCameraOff) {
+    // Stop video tracks to turn off camera light
+    for (const t of localStream.getVideoTracks()) { t.stop(); localStream.removeTrack(t); }
+    await replaceVideoTrack(null);
+  } else {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      const track = s.getVideoTracks()[0];
+      localStream.addTrack(track);
+      await replaceVideoTrack(track);
+      updateTileStream('local', localStream);
+    } catch (e) {
+      showToast('Kamera açılamadı: ' + e.message, 'error');
+      isCameraOff = true;
+    }
   }
+
   document.getElementById('camOnIcon').classList.toggle('hidden', isCameraOff);
   document.getElementById('camOffIcon').classList.toggle('hidden', !isCameraOff);
   cameraBtn.classList.toggle('bg-red-700', isCameraOff);
@@ -871,10 +930,12 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
 // ── Leave ─────────────────────────────────────────────────────────────────────
 document.getElementById('leaveBtn').addEventListener('click', async () => {
   await stopScreenShare().catch(() => {});
+  stopAudioMonitor('local');
   await connection.invoke('LeaveRoom', ROOM).catch(() => {});
   await connection.stop().catch(() => {});
   for (const [, pc] of peerConnections) pc.close();
   peerConnections.clear();
+  peerSenders.clear();
   if (localStream) for (const t of localStream.getTracks()) t.stop();
   location.href = '/';
 });
@@ -898,9 +959,10 @@ async function init() {
     localStream = new MediaStream(); // empty stream
   }
 
-  // Create local tile
+  // Create local tile and start local mic monitoring
   createTile('local', MY_NAME, localStream, true);
   updateTileMediaState('local', true, true);
+  if (localStream.getAudioTracks().length) startAudioMonitor('local', localStream);
 
   // Connect SignalR
   try {
@@ -908,6 +970,7 @@ async function init() {
     myId = connection.connectionId;
     setStatus(true);
     await connection.invoke('JoinRoom', ROOM, MY_NAME);
+    await connection.invoke('UpdateMediaState', ROOM, !isMuted, !isCameraOff);
     renderParticipants();
   } catch (e) {
     setStatus(false);

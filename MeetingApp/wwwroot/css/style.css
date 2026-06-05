@@ -131,17 +131,38 @@
   display: none;
 }
 
-/* ── Audio level bar ─────────────────────────────── */
-.audio-level-bar {
+/* ── Mic level indicator ─────────────────────────── */
+.tile-mic-indicator {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.38);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mic-fill-bar {
   position: absolute;
   bottom: 0;
   left: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
-  border-radius: 0 2px 0 0;
-  transition: width 0.08s ease, opacity 0.15s ease;
-  pointer-events: none;
-  z-index: 10;
+  right: 0;
+  height: 0%;
+  background: rgba(251, 191, 36, 0.88);
+  transition: height 0.07s ease;
+}
+
+.tile-mic-indicator svg {
+  position: relative;
+  z-index: 1;
+  width: 58%;
+  height: 58%;
+  opacity: 0.9;
 }
 
 /* ── Chat messages ────────────────────────────────── */
