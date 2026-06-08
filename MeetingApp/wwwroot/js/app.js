@@ -765,6 +765,16 @@ connection.on('ReceiveYouTubeStop', () => {
   hideYTWidget();
 });
 
+connection.on('RecordingStarted', (recorderName) => {
+  setRecordButtonsDisabled(true, recorderName);
+  showToast(`● ${recorderName} kayıt alıyor`, 'info');
+});
+
+connection.on('RecordingStopped', () => {
+  setRecordButtonsDisabled(false, '');
+  showToast('Kayıt sona erdi', 'info');
+});
+
 // Reconnect handlers
 connection.onreconnecting(() => setStatus(false));
 connection.onreconnected(() => setStatus(true));
@@ -1292,11 +1302,37 @@ function syncRecordUI() {
 }
 
 // ── Start / Stop ──────────────────────────────────────────────────────────────
+// ── Recording state helpers ────────────────────────────────────────────────────
+function setRecordButtonsDisabled(disabled, recorderName) {
+  ['recordBtn', 'recordBtnMobile'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.disabled = disabled;
+    b.classList.toggle('opacity-40', disabled);
+    b.classList.toggle('cursor-not-allowed', disabled);
+    b.title = disabled ? `${recorderName} kayıt alıyor` : 'Toplantıyı kaydet';
+  });
+
+  const banner     = document.getElementById('recordingBanner');
+  const bannerText = document.getElementById('recordingBannerText');
+  if (banner) banner.classList.toggle('hidden', !disabled);
+  if (bannerText && disabled) bannerText.textContent = `${recorderName} kayıt alıyor`;
+}
+
 async function startRecording() {
+  // Ask the hub first — throws if someone else is already recording
+  try {
+    await connection.invoke('StartRecording', ROOM);
+  } catch (e) {
+    showToast(e.message || 'Kayıt başlatılamadı', 'error');
+    return;
+  }
+
   const stream = buildRecordingStream();
   if (!stream.getTracks().length) {
     showToast('No media to record', 'error');
     cleanupRecordingCanvas();
+    connection.invoke('StopRecording', ROOM).catch(() => {});
     return;
   }
 
@@ -1341,6 +1377,7 @@ async function startRecording() {
 
 function stopRecording() {
   if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  connection.invoke('StopRecording', ROOM).catch(console.error);
   mediaRecorder.stop();
   isRecording = false;
   syncRecordUI();

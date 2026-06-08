@@ -66,6 +66,12 @@ public class MeetingHub : Hub
         if (ytVideoId != null)
             await Clients.Caller.SendAsync("ReceiveYouTubePlay", ytVideoId, ytStarterName ?? "", ytElapsed);
 
+        // If someone is already recording, inform the new joiner
+        string? activeRecorderName;
+        lock (room.Lock) { activeRecorderName = room.RecorderName; }
+        if (activeRecorderName != null)
+            await Clients.Caller.SendAsync("RecordingStarted", activeRecorderName);
+
         // Notify others
         await Clients.OthersInGroup(roomCode).SendAsync("UserJoined", userId, userName);
     }
@@ -120,6 +126,41 @@ public class MeetingHub : Hub
 
         await Clients.OthersInGroup(roomCode).SendAsync("ParticipantMediaChanged",
             Context.ConnectionId, p.IsAudioOn, p.IsVideoOn, isSharingScreen);
+    }
+
+    // ─── Recording ───────────────────────────────────────────────────────────
+
+    public async Task StartRecording(string roomCode)
+    {
+        roomCode = roomCode.ToUpperInvariant();
+        if (!Rooms.TryGetValue(roomCode, out var room)) return;
+        if (!room.Participants.TryGetValue(Context.ConnectionId, out var p)) return;
+
+        lock (room.Lock)
+        {
+            if (room.RecorderConnectionId != null)
+                throw new HubException("Zaten biri kayıt alıyor.");
+            room.RecorderConnectionId = Context.ConnectionId;
+            room.RecorderName         = p.UserName;
+        }
+
+        // Notify everyone else — caller handles its own UI after invoke resolves
+        await Clients.OthersInGroup(roomCode).SendAsync("RecordingStarted", p.UserName);
+    }
+
+    public async Task StopRecording(string roomCode)
+    {
+        roomCode = roomCode.ToUpperInvariant();
+        if (!Rooms.TryGetValue(roomCode, out var room)) return;
+
+        lock (room.Lock)
+        {
+            if (room.RecorderConnectionId != Context.ConnectionId) return;
+            room.RecorderConnectionId = null;
+            room.RecorderName         = null;
+        }
+
+        await Clients.OthersInGroup(roomCode).SendAsync("RecordingStopped");
     }
 
     // ─── WebRTC signaling ────────────────────────────────────────────────────
@@ -232,10 +273,18 @@ public class MeetingHub : Hub
         if (!Rooms.TryGetValue(roomCode, out var room)) return;
 
         Participant? participant = null;
+        bool wasRecording = false;
         lock (room.Lock)
         {
             room.Participants.TryGetValue(connectionId, out participant);
             room.Participants.Remove(connectionId);
+
+            if (room.RecorderConnectionId == connectionId)
+            {
+                room.RecorderConnectionId = null;
+                room.RecorderName         = null;
+                wasRecording              = true;
+            }
 
             if (room.Participants.Count == 0)
                 Rooms.TryRemove(roomCode, out _);
@@ -245,6 +294,9 @@ public class MeetingHub : Hub
 
         if (participant != null)
             await Clients.Group(roomCode).SendAsync("UserLeft", connectionId, participant.UserName);
+
+        if (wasRecording)
+            await Clients.Group(roomCode).SendAsync("RecordingStopped");
     }
 
     private bool TryGetParticipant(string connectionId,

@@ -12,4 +12,8 @@ public class Room
     public string? YoutubeVideoId { get; set; }
     public string? YoutubeStarterName { get; set; }
     public DateTime? YoutubeStartedAt { get; set; }
+
+    // Recording state
+    public string? RecorderConnectionId { get; set; }
+    public string? RecorderName         { get; set; }
 }
