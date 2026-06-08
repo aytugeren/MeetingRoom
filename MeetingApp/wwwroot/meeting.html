@@ -110,6 +110,16 @@
         <span class="text-xs font-medium ml-1">Share</span>
       </button>
 
+      <button id="recordBtn" title="Record meeting" class="toolbar-btn bg-gray-700 hover:bg-gray-600">
+        <svg id="recordStartIcon" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="7" fill="#ef4444"/>
+        </svg>
+        <svg id="recordStopIcon" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="5" y="5" width="14" height="14" rx="2" fill="white"/>
+        </svg>
+        <span id="recordBtnLabel" class="text-xs font-medium ml-1">Record</span>
+      </button>
+
       <div class="w-px h-6 bg-gray-700 mx-1"></div>
 
       <button id="leaveBtn" class="toolbar-btn bg-red-700 hover:bg-red-600 text-white">
@@ -286,6 +296,16 @@
       <span id="screenBtnMobileLabel" class="text-xs text-gray-400">Share</span>
     </button>
 
+    <button id="recordBtnMobile" title="Kayıt" class="toolbar-btn bg-gray-700 hover:bg-gray-600 flex-col gap-0.5 !py-1.5 !px-3">
+      <svg id="recordStartIconMobile" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="12" cy="12" r="7" fill="#ef4444"/>
+      </svg>
+      <svg id="recordStopIconMobile" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="5" y="5" width="14" height="14" rx="2" fill="white"/>
+      </svg>
+      <span id="recordBtnMobileLabel" class="text-xs text-gray-400">Rec</span>
+    </button>
+
     <button id="leaveBtnMobile2" class="toolbar-btn bg-red-700 hover:bg-red-600 text-white flex-col gap-0.5 !py-1.5 !px-3">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -357,6 +377,7 @@
   <div id="toastContainer" class="fixed bottom-20 sm:bottom-5 right-5 space-y-2 z-50"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

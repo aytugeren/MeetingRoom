@@ -975,6 +975,7 @@ async function toggleScreen() {
 
       const screenTrack = screenStream.getVideoTracks()[0];
       await replaceVideoTrack(screenTrack);
+      swapRecordingVideoTrack();
       await connection.invoke('UpdateScreenShareState', ROOM, true);
       screenTrack.onended = () => stopScreenShare();
 
@@ -1004,6 +1005,7 @@ async function stopScreenShare() {
 
   const camTrack = localStream?.getVideoTracks()[0] || null;
   await replaceVideoTrack(camTrack);
+  swapRecordingVideoTrack();
 
   screenShareView.classList.add('hidden');
   screenShareVideo.srcObject = null;
@@ -1110,8 +1112,251 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
   e.target.value = '';
 });
 
+// ── Recording ─────────────────────────────────────────────────────────────────
+const PART_SIZE_LIMIT = 500 * 1024 * 1024; // 500 MB per part
+
+let isRecording    = false;
+let mediaRecorder  = null;
+let recordAudioCtx = null;
+let recordMimeType = '';
+let recordExt      = 'webm';
+
+// Part management
+let recordParts  = [];   // { blob: Blob, partNum: number }[]  — sealed parts
+let partChunks   = [];   // Uint8Array chunks for the current part
+let partSize     = 0;    // bytes accumulated in the current part
+let partNum      = 1;    // 1-based current part index
+
+// Canvas + Worker
+let recordCanvas    = null;
+let recordCanvasCtx = null;
+let recordSrcEl     = null;
+let recordWorker    = null;
+
+const _DRAW_WORKER = `
+  let iv = null;
+  onmessage = e => {
+    if (e.data === 'start') iv = setInterval(() => postMessage(0), 33);
+    else { clearInterval(iv); iv = null; close(); }
+  };
+`;
+
+function getRecordSourceEl() {
+  if (isSharingScreen && screenStream) return screenShareVideo;
+  return document.getElementById('tile-local')?.querySelector('video') ?? null;
+}
+
+function buildRecordingStream() {
+  recordAudioCtx = new AudioContext();
+  const dest = recordAudioCtx.createMediaStreamDestination();
+  const addAudio = track => {
+    try { recordAudioCtx.createMediaStreamSource(new MediaStream([track])).connect(dest); }
+    catch (_) {}
+  };
+  if (localStream) localStream.getAudioTracks().forEach(addAudio);
+  for (const [peerId] of peerConnections) {
+    const vid = document.getElementById(`tile-${peerId}`)?.querySelector('video');
+    if (vid?.srcObject) vid.srcObject.getAudioTracks().forEach(addAudio);
+  }
+
+  recordCanvas = document.createElement('canvas');
+  recordCanvas.width  = 1280;
+  recordCanvas.height = 720;
+  recordCanvasCtx = recordCanvas.getContext('2d');
+  recordSrcEl = getRecordSourceEl();
+
+  const workerBlob = new Blob([_DRAW_WORKER], { type: 'text/javascript' });
+  recordWorker = new Worker(URL.createObjectURL(workerBlob));
+  recordWorker.onmessage = () => {
+    if (!recordCanvasCtx) return;
+    if (recordSrcEl && recordSrcEl.readyState >= 2)
+      recordCanvasCtx.drawImage(recordSrcEl, 0, 0, recordCanvas.width, recordCanvas.height);
+    else {
+      recordCanvasCtx.fillStyle = '#111827';
+      recordCanvasCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
+    }
+  };
+  recordWorker.postMessage('start');
+
+  return new MediaStream([
+    ...recordCanvas.captureStream(30).getVideoTracks(),
+    ...dest.stream.getAudioTracks()
+  ]);
+}
+
+function swapRecordingVideoTrack() { recordSrcEl = getRecordSourceEl(); }
+
+function cleanupRecordingCanvas() {
+  if (recordWorker) { recordWorker.postMessage('stop'); recordWorker = null; }
+  recordCanvas = recordCanvasCtx = recordSrcEl = null;
+}
+
+// ── Part management ───────────────────────────────────────────────────────────
+function sealCurrentPart() {
+  if (!partChunks.length) return;
+  const blob = new Blob(partChunks, { type: recordMimeType || 'video/webm' });
+  recordParts.push({ blob, partNum });
+  showToast(`Part ${partNum} tamamlandı — ${formatBytes(blob.size)}`, 'info');
+  partNum++;
+  partChunks = [];
+  partSize   = 0;
+  updateRecordProgress();
+}
+
+function updateRecordProgress() {
+  if (!isRecording) return;
+  const totalParts = recordParts.length + 1; // sealed + current
+  const sizeStr    = formatBytes(partSize);
+  const partLabel  = totalParts > 1 || partSize >= PART_SIZE_LIMIT * 0.1
+    ? ` · Part ${partNum}`
+    : '';
+  const label  = document.getElementById('recordBtnLabel');
+  const labelM = document.getElementById('recordBtnMobileLabel');
+  if (label)  label.textContent  = `${sizeStr}${partLabel}`;
+  if (labelM) labelM.textContent = `${sizeStr}`;
+}
+
+// ── Download helpers ──────────────────────────────────────────────────────────
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+async function finalizeRecording() {
+  sealCurrentPart(); // seal whatever is left
+  if (!recordParts.length) return;
+
+  const ts       = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const baseName = `meeting_${ROOM}_${ts}`;
+
+  if (recordParts.length === 1) {
+    // Single part — direct download, no ZIP needed
+    triggerDownload(recordParts[0].blob, `${baseName}.${recordExt}`);
+    showToast('Kayıt indirildi', 'success');
+  } else {
+    // Multiple parts — create ZIP with Part badges
+    showToast('ZIP oluşturuluyor…', 'info');
+    try {
+      const zip = new JSZip();
+      for (const { blob, partNum: n } of recordParts)
+        zip.file(`${baseName}_Part${n}.${recordExt}`, blob);
+
+      const zipBlob = await zip.generateAsync(
+        { type: 'blob', compression: 'STORE' }, // STORE = no re-compress, just bundle
+        meta => {
+          const pct = Math.round(meta.percent);
+          const label = document.getElementById('recordBtnLabel');
+          if (label) label.textContent = `ZIP %${pct}`;
+        }
+      );
+      triggerDownload(zipBlob, `${baseName}_${recordParts.length}parts.zip`);
+      showToast(`${recordParts.length} parça ZIP olarak indirildi`, 'success');
+    } catch (err) {
+      showToast('ZIP oluşturma hatası: ' + err.message, 'error');
+    }
+  }
+
+  // Reset state for next recording
+  recordParts = [];
+  partChunks  = [];
+  partSize    = 0;
+  partNum     = 1;
+}
+
+// ── UI sync ───────────────────────────────────────────────────────────────────
+function syncRecordUI() {
+  const recording = isRecording;
+  ['recordBtn', 'recordBtnMobile'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.classList.toggle('bg-red-700',      recording);
+    b.classList.toggle('hover:bg-red-600', recording);
+    b.classList.toggle('bg-gray-700',     !recording);
+    b.classList.toggle('hover:bg-gray-600', !recording);
+  });
+  ['recordStartIcon', 'recordStartIconMobile'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('hidden', recording));
+  ['recordStopIcon', 'recordStopIconMobile'].forEach(id =>
+    document.getElementById(id)?.classList.toggle('hidden', !recording));
+
+  if (!recording) {
+    const label  = document.getElementById('recordBtnLabel');
+    const labelM = document.getElementById('recordBtnMobileLabel');
+    if (label)  label.textContent  = 'Record';
+    if (labelM) labelM.textContent = 'Rec';
+  }
+}
+
+// ── Start / Stop ──────────────────────────────────────────────────────────────
+async function startRecording() {
+  const stream = buildRecordingStream();
+  if (!stream.getTracks().length) {
+    showToast('No media to record', 'error');
+    cleanupRecordingCanvas();
+    return;
+  }
+
+  // Reset part state
+  recordParts = [];
+  partChunks  = [];
+  partSize    = 0;
+  partNum     = 1;
+
+  recordMimeType = [
+    'video/mp4;codecs=avc1,mp4a.40.2',
+    'video/mp4;codecs=avc1',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ].find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+  recordExt = recordMimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+
+  mediaRecorder = new MediaRecorder(stream, recordMimeType ? { mimeType: recordMimeType } : {});
+
+  mediaRecorder.ondataavailable = e => {
+    if (!e.data.size) return;
+    partChunks.push(e.data);
+    partSize += e.data.size;
+    updateRecordProgress();
+    if (partSize >= PART_SIZE_LIMIT) sealCurrentPart();
+  };
+
+  mediaRecorder.onstop = () => {
+    cleanupRecordingCanvas();
+    recordAudioCtx?.close().catch(() => {});
+    recordAudioCtx = null;
+    finalizeRecording();
+  };
+
+  mediaRecorder.start(1000);
+  isRecording = true;
+  syncRecordUI();
+  showToast(`Kayıt başladı (${recordExt.toUpperCase()})`, 'info');
+}
+
+function stopRecording() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  mediaRecorder.stop();
+  isRecording = false;
+  syncRecordUI();
+  showToast('Kayıt durduruluyor…', 'info');
+}
+
+function toggleRecording() {
+  if (isRecording) stopRecording(); else startRecording();
+}
+
+document.getElementById('recordBtn')?.addEventListener('click', toggleRecording);
+document.getElementById('recordBtnMobile')?.addEventListener('click', toggleRecording);
+
 // ── Leave ─────────────────────────────────────────────────────────────────────
 async function doLeave() {
+  if (isRecording) stopRecording();
   await stopScreenShare().catch(() => {});
   stopAudioMonitor('local');
   await connection.invoke('LeaveRoom', ROOM).catch(() => {});
